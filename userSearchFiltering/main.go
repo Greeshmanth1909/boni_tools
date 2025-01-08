@@ -6,6 +6,8 @@ import (
     "log"
 	"time"
     "context"
+    "encoding/json"
+    "go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -34,10 +36,39 @@ func main() {
 	database := client.Database("TestDB")
 	fmt.Printf("Database name: %s\n", database.Name())
     condition := bson.M{
-        "status": "business_send",
+        "state": "business_send",
+        "business_details": bson.M{"$exists": true, "$not": bson.M{"$size": 0}},
     }
     fmt.Println(condition)
 
+    findOptions := options.Find()
+    findOptions.SetLimit(10)
+
+    cur, err := database.Collection("test_collection").Find(context.Background(), condition, findOptions)
+    if err != nil {
+        log.Fatal(err)
+    }
+    fmt.Println(cur)
+
+    var data []bson.M
+    if err := cur.All(context.Background(), &data); err != nil {
+		log.Fatal(err)
+	}
+
+    fmt.Println(len(data))
+
+    fmt.Println(data[5]["phone_number"])
+    // Marshalling json
+    out, err := json.Marshal(data)
+    if err != nil {
+        log.Fatalf("error marshalling")
+    }
+
+    err = os.WriteFile("output.json", out, 0644)
+	if err != nil {
+		fmt.Println("Error writing JSON to file:", err)
+		return
+	}
 
 	defer func() {
 		if err := client.Disconnect(ctx); err != nil {
