@@ -7,15 +7,20 @@ import (
 	"time"
     "context"
     "encoding/json"
+    "regexp"
     "go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 func main() {
-    fmt.Println("Hello World")
+    fmt.Println("userSearchFiltering: accessing environment variable:- mongoUrl")
     mongoUrl := os.Getenv("mongoUrl")
-    fmt.Println(mongoUrl)
+    if mongoUrl == "" {
+        fmt.Println("Please set environment variable: mongoUrl to the url of mongoDB")
+        return
+    }
+
     clientOptions := options.Client().ApplyURI(mongoUrl)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -39,31 +44,47 @@ func main() {
         "state": "business_send",
         "business_details": bson.M{"$exists": true, "$not": bson.M{"$size": 0}},
     }
-    fmt.Println(condition)
 
-    findOptions := options.Find()
-    findOptions.SetLimit(10)
+    // options to the search query of mongo
+    // findOptions := options.Find()
+    // findOptions.SetLimit(1000)
 
-    cur, err := database.Collection("test_collection").Find(context.Background(), condition, findOptions)
+    cur, err := database.Collection("test_collection").Find(context.Background(), condition)
     if err != nil {
         log.Fatal(err)
     }
-    fmt.Println(cur)
 
     var data []bson.M
     if err := cur.All(context.Background(), &data); err != nil {
 		log.Fatal(err)
 	}
 
-    fmt.Println(len(data))
 
-    fmt.Println(data[5]["phone_number"])
+    var output []bson.M
+    // Use Regex to match for travel, travelling etc
+    regex := `(?i)\btravel(?:ling|led)?\b`
+    for _, val := range data {
+        conv_start, ok := val["conv_start_msg"]
+        if ok {
+            str, yay := conv_start.(string)
+            if yay {
+                if ok, err := regexp.Match(regex, []byte(str)); ok{
+                    output = append(output, val)
+                } else if err != nil {
+                    fmt.Println("Failed to match regex error")
+                }
+
+            }
+        }
+    }
+
     // Marshalling json
-    out, err := json.Marshal(data)
+    out, err := json.Marshal(output)
     if err != nil {
         log.Fatalf("error marshalling")
     }
 
+    // Write marshalled json to file
     err = os.WriteFile("output.json", out, 0644)
 	if err != nil {
 		fmt.Println("Error writing JSON to file:", err)
