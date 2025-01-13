@@ -137,6 +137,9 @@ func main() {
 	}()
 }
 
+/*
+    getBowIDFromPhoneNum function calls the bowapi to fetch id form bowApi.
+*/
 func getBowIDFromPhoneNum(phone string) (bowId int) {
     url := fmt.Sprintf("https://app.bow.chat/api/v1/accounts/2/contacts/search?q=%v", phone)
 
@@ -222,6 +225,9 @@ func getLeadsAccepted(db, collection string, condition bson.M, client *mongo.Cli
     return
 }
 
+/*
+    getDataFromMongo function fetches data from mongo based on the given condition and stores it in results.
+*/
 func getDataFromMongo[T any](db, col string, condition bson.M, results *[]T, client *mongo.Client) {
 	database := client.Database(db)
 	fmt.Printf("Database name: %s\n", database.Name())
