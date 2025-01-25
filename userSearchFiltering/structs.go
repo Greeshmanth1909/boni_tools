@@ -125,17 +125,271 @@ type Mongo struct {
 }
 
 type Business struct {
-		BusinessName string `bson:"business_name"`
-		Location     string `bson:"location"`
-		PhoneNumber  string `bson:"phone_number"`
+	BusinessName string `bson:"business_name"`
+	Location     string `bson:"location"`
+	PhoneNumber  string `bson:"phone_number"`
 }
 
 type UpdatedBusiness struct {
-		BusinessName string `bson:"business_name"`
-		Location     string `bson:"location"`
-		PhoneNumber  string `bson:"phone_number"`
-        ID           int
-        NumLeads     int
-        NumResponse  int
-        NumAccepts   int
+	BusinessName    string `bson:"business_name"`
+	Location        string `bson:"location"`
+	PhoneNumber     string `bson:"phone_number"`
+	ID              int
+	NumLeads        int
+	NumResponse     int
+	NumAccepts      int
+	DetailedAddress struct {
+		Ward        string `json:"ward"`
+		Street      string `json:"street"`
+		City        string `json:"city"`
+		PostalCode  string `json:"postal_code"`
+		State       string `json:"state"`
+		CountryCode string `json:"country_code"`
+	} `json:"google_maps_detailed_address"`
+	Competitors   []interface{} `json:"google_maps_competitors"`
+	Description   string        `json:"google_maps_description"`
+	FeaturedImage string        `json:"google_maps_featured_image"`
+	Images        []struct {
+		About string `json:"about"`
+		Link  string `json:"link"`
+	} `json:"google_maps_images"`
+}
+
+type ScraperResponse []struct {
+	ID           int         `json:"id"`
+	Status       string      `json:"status"`
+	TaskName     string      `json:"task_name"`
+	ScraperName  string      `json:"scraper_name"`
+	ScraperType  string      `json:"scraper_type"`
+	IsAllTask    bool        `json:"is_all_task"`
+	IsSync       bool        `json:"is_sync"`
+	ParentTaskID interface{} `json:"parent_task_id"`
+	Duration     float64     `json:"duration"`
+	StartedAt    string      `json:"started_at"`
+	FinishedAt   string      `json:"finished_at"`
+	Data         struct {
+		Queries                 []string    `json:"queries"`
+		Country                 interface{} `json:"country"`
+		BusinessType            string      `json:"business_type"`
+		MaxCities               interface{} `json:"max_cities"`
+		RandomizeCities         bool        `json:"randomize_cities"`
+		APIKey                  string      `json:"api_key"`
+		EnableReviewsExtraction bool        `json:"enable_reviews_extraction"`
+		MaxReviews              int         `json:"max_reviews"`
+		ReviewsSort             string      `json:"reviews_sort"`
+		Lang                    string      `json:"lang"`
+		MaxResults              int         `json:"max_results"`
+		Coordinates             string      `json:"coordinates"`
+		ZoomLevel               int         `json:"zoom_level"`
+	} `json:"data"`
+	Metadata struct {
+	} `json:"metadata"`
+	Result []struct {
+		PlaceID         string        `json:"place_id"`
+		Name            string        `json:"name"`
+		Description     string        `json:"description"`
+		IsSpendingOnAds bool          `json:"is_spending_on_ads"`
+		Reviews         int           `json:"reviews"`
+		Competitors     []interface{} `json:"competitors"`
+		Website         string        `json:"website"`
+		Phone           string        `json:"phone"`
+		CanClaim        bool          `json:"can_claim"`
+		Owner           struct {
+			ID   string `json:"id"`
+			Name string `json:"name"`
+			Link string `json:"link"`
+		} `json:"owner"`
+		FeaturedImage  string      `json:"featured_image"`
+		MainCategory   string      `json:"main_category"`
+		Categories     []string    `json:"categories"`
+		Rating         float64     `json:"rating"`
+		WorkdayTiming  interface{} `json:"workday_timing"`
+		Address        string      `json:"address"`
+		ReviewKeywords []struct {
+			Keyword string `json:"keyword"`
+			Count   int    `json:"count"`
+		} `json:"review_keywords"`
+		ReviewsPerRating struct {
+			Num1 int `json:"1"`
+			Num2 int `json:"2"`
+			Num3 int `json:"3"`
+			Num4 int `json:"4"`
+			Num5 int `json:"5"`
+		} `json:"reviews_per_rating"`
+		FeaturedQuestion interface{} `json:"featured_question"`
+		ReviewsLink      string      `json:"reviews_link"`
+		Coordinates      struct {
+			Latitude  float64 `json:"latitude"`
+			Longitude float64 `json:"longitude"`
+		} `json:"coordinates"`
+		PlusCode        string `json:"plus_code"`
+		DetailedAddress struct {
+			Ward        string `json:"ward"`
+			Street      string `json:"street"`
+			City        string `json:"city"`
+			PostalCode  string `json:"postal_code"`
+			State       string `json:"state"`
+			CountryCode string `json:"country_code"`
+		} `json:"detailed_address"`
+		Images []struct {
+			About string `json:"about"`
+			Link  string `json:"link"`
+		} `json:"images"`
+		Query string `json:"query"`
+	} `json:"result"`
+	ResultCount int    `json:"result_count"`
+	CreatedAt   string `json:"created_at"`
+	UpdatedAt   string `json:"updated_at"`
+}
+
+type Scraperbody struct {
+	ScraperName string `json:"scraper_name"`
+	Data        struct {
+		Queries                 []string `json:"queries"`
+		Country                 *string  `json:"country"`
+		MaxCities               *int     `json:"max_cities"`
+		RandomizeCities         bool     `json:"randomize_cities"`
+		APIKey                  string   `json:"api_key"`
+		EnableReviewsExtraction bool     `json:"enable_reviews_extraction"`
+		MaxReviews              int      `json:"max_reviews"`
+		ReviewsSort             string   `json:"reviews_sort"`
+		Lang                    string   `json:"lang"`
+		MaxResults              int      `json:"max_results"`
+		Coordinates             string   `json:"coordinates"`
+		ZoomLevel               int      `json:"zoom_level"`
+	} `json:"data"`
+}
+
+type AutoGenerated []struct {
+	ID           int         `json:"id"`
+	Status       string      `json:"status"`
+	TaskName     string      `json:"task_name"`
+	ScraperName  string      `json:"scraper_name"`
+	ScraperType  string      `json:"scraper_type"`
+	IsAllTask    bool        `json:"is_all_task"`
+	IsSync       bool        `json:"is_sync"`
+	ParentTaskID interface{} `json:"parent_task_id"`
+	Duration     float64     `json:"duration"`
+	StartedAt    string      `json:"started_at"`
+	FinishedAt   string      `json:"finished_at"`
+	Data         struct {
+		Queries                 []string    `json:"queries"`
+		Country                 interface{} `json:"country"`
+		BusinessType            string      `json:"business_type"`
+		MaxCities               interface{} `json:"max_cities"`
+		RandomizeCities         bool        `json:"randomize_cities"`
+		APIKey                  string      `json:"api_key"`
+		EnableReviewsExtraction bool        `json:"enable_reviews_extraction"`
+		MaxReviews              int         `json:"max_reviews"`
+		ReviewsSort             string      `json:"reviews_sort"`
+		Lang                    string      `json:"lang"`
+		MaxResults              int         `json:"max_results"`
+		Coordinates             string      `json:"coordinates"`
+		ZoomLevel               int         `json:"zoom_level"`
+	} `json:"data"`
+	Metadata struct {
+	} `json:"metadata"`
+	Result []struct {
+		PlaceID         string        `json:"place_id"`
+		Name            string        `json:"name"`
+		Description     interface{}   `json:"description"`
+		IsSpendingOnAds bool          `json:"is_spending_on_ads"`
+		Reviews         int           `json:"reviews"`
+		Competitors     []interface{} `json:"competitors"`
+		Website         string        `json:"website"`
+		Phone           string        `json:"phone"`
+		CanClaim        bool          `json:"can_claim"`
+		Owner           struct {
+			ID   string `json:"id"`
+			Name string `json:"name"`
+			Link string `json:"link"`
+		} `json:"owner"`
+		FeaturedImage  string      `json:"featured_image"`
+		MainCategory   string      `json:"main_category"`
+		Categories     []string    `json:"categories"`
+		Rating         float64     `json:"rating"`
+		WorkdayTiming  interface{} `json:"workday_timing"`
+		ClosedOn       string      `json:"closed_on"`
+		Address        string      `json:"address"`
+		ReviewKeywords []struct {
+			Keyword string `json:"keyword"`
+			Count   int    `json:"count"`
+		} `json:"review_keywords"`
+		Link             string      `json:"link"`
+		Status           interface{} `json:"status"`
+		PriceRange       interface{} `json:"price_range"`
+		ReviewsPerRating struct {
+			Num1 int `json:"1"`
+			Num2 int `json:"2"`
+			Num3 int `json:"3"`
+			Num4 int `json:"4"`
+			Num5 int `json:"5"`
+		} `json:"reviews_per_rating"`
+		FeaturedQuestion interface{} `json:"featured_question"`
+		ReviewsLink      string      `json:"reviews_link"`
+		Coordinates      struct {
+			Latitude  float64 `json:"latitude"`
+			Longitude float64 `json:"longitude"`
+		} `json:"coordinates"`
+		PlusCode        string `json:"plus_code"`
+		DetailedAddress struct {
+			Ward        string `json:"ward"`
+			Street      string `json:"street"`
+			City        string `json:"city"`
+			PostalCode  string `json:"postal_code"`
+			State       string `json:"state"`
+			CountryCode string `json:"country_code"`
+		} `json:"detailed_address"`
+		TimeZone string        `json:"time_zone"`
+		Cid      string        `json:"cid"`
+		DataID   string        `json:"data_id"`
+		About    []interface{} `json:"about"`
+		Images   []struct {
+			About string `json:"about"`
+			Link  string `json:"link"`
+		} `json:"images"`
+		Hours            []interface{} `json:"hours"`
+		MostPopularTimes string        `json:"most_popular_times"`
+		PopularTimes     string        `json:"popular_times"`
+		Menu             interface{}   `json:"menu"`
+		Reservations     []interface{} `json:"reservations"`
+		OrderOnlineLinks []interface{} `json:"order_online_links"`
+		FeaturedReviews  []struct {
+			ReviewID                        string        `json:"review_id"`
+			Rating                          int           `json:"rating"`
+			ReviewText                      string        `json:"review_text"`
+			PublishedAt                     string        `json:"published_at"`
+			PublishedAtDate                 string        `json:"published_at_date"`
+			ResponseFromOwnerText           string        `json:"response_from_owner_text"`
+			ResponseFromOwnerAgo            string        `json:"response_from_owner_ago"`
+			ResponseFromOwnerDate           string        `json:"response_from_owner_date"`
+			ReviewLikesCount                interface{}   `json:"review_likes_count"`
+			TotalNumberOfReviewsByReviewer  interface{}   `json:"total_number_of_reviews_by_reviewer"`
+			TotalNumberOfPhotosByReviewer   interface{}   `json:"total_number_of_photos_by_reviewer"`
+			IsLocalGuide                    bool          `json:"is_local_guide"`
+			ReviewTranslatedText            interface{}   `json:"review_translated_text"`
+			ResponseFromOwnerTranslatedText interface{}   `json:"response_from_owner_translated_text"`
+			ReviewPhotos                    []interface{} `json:"review_photos"`
+		} `json:"featured_reviews"`
+		DetailedReviews []struct {
+			ReviewID                        string      `json:"review_id"`
+			Rating                          int         `json:"rating"`
+			ReviewText                      string      `json:"review_text"`
+			PublishedAt                     string      `json:"published_at"`
+			PublishedAtDate                 string      `json:"published_at_date"`
+			ResponseFromOwnerText           string      `json:"response_from_owner_text"`
+			ResponseFromOwnerAgo            string      `json:"response_from_owner_ago"`
+			ResponseFromOwnerDate           string      `json:"response_from_owner_date"`
+			ReviewLikesCount                int         `json:"review_likes_count"`
+			TotalNumberOfReviewsByReviewer  int         `json:"total_number_of_reviews_by_reviewer"`
+			TotalNumberOfPhotosByReviewer   interface{} `json:"total_number_of_photos_by_reviewer"`
+			IsLocalGuide                    bool        `json:"is_local_guide"`
+			ReviewTranslatedText            interface{} `json:"review_translated_text"`
+			ResponseFromOwnerTranslatedText interface{} `json:"response_from_owner_translated_text"`
+		} `json:"detailed_reviews"`
+		Query string `json:"query"`
+	} `json:"result"`
+	ResultCount int    `json:"result_count"`
+	CreatedAt   string `json:"created_at"`
+	UpdatedAt   string `json:"updated_at"`
 }
