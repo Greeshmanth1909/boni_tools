@@ -1,9 +1,10 @@
 package main
 
 import (
-	"fmt"
+    "fmt"
 	"strconv"
-	"sync"
+    "context"
+    "sync"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 )
@@ -17,21 +18,16 @@ type buffer struct {
 	result       *UpdatedBusiness
 }
 
-var countFromMongoBuffer = make(chan buffer, 100)
-var leadAcceptBuffer = make(chan buffer, 100)
-var scraperBuffer = make(chan buffer, 100)
-var pushToMongoBuffer = make(chan buffer, 100)
-
 func createBuffer(output []Business, client, targetClient *mongo.Client, scraperUrl string) (<- chan buffer) {
     buf := make(chan buffer, 100)
     go func(){
         defer close(buf)
-        for _, business := range output {
+        for i, business := range output {
             newBuf := buffer{}
             newBuf.business = business
             newBuf.client = client
             newBuf.targetClient = targetClient
-            newBuf.scrapeUrl = scraperUrl
+            newBuf.scraperUrl = scraperUrl
             newBuf.result = &UpdatedBusiness{}
 
             newBuf.result.BusinessName = business.BusinessName
@@ -39,6 +35,10 @@ func createBuffer(output []Business, client, targetClient *mongo.Client, scraper
             newBuf.result.PhoneNumber = business.PhoneNumber
 
             buf <- newBuf
+            if i == 30 {
+                fmt.Println("150 done!")
+                break
+            }
         }
     }()
 
@@ -46,182 +46,186 @@ func createBuffer(output []Business, client, targetClient *mongo.Client, scraper
 }
 
 // function bowWorker reads from buf channel, gets bowId from phoneNumber, adds condition and pushes it to another channel
-func createBowWorkers(ctx context.Context, buf <- chan buffer, num int) []buffer {
+func createBowWorkers(ctx context.Context, buf <- chan buffer, num int) []<-chan buffer {
     var bufArr = [] <-chan buffer{}
     for i := 0; i < num; i++ {
         // get chan and add it to array
-        bufChan := func(ctx context.Context){
+        func(ctx context.Context){
             newBuf := make(chan buffer, 1000)
-
             go func(){
-                defer close(buf)
+                defer close(newBuf)
                 // read with switch statement
-                select {
-                case <-ctx.Done():
-                    return
-                case val, ok := <- buf:
-                    if ok {
-                        // val exists
-                        id := getBowIDFromPhoneNum(val.PhoneNumber)
-
-                        val.result.ID = id
-                        val.condition = bson.M{
-                            "business_user_id": strconv.Itoa(id),
-                        }
-
-                        // push to channel
-                        newBuf <- val
-                    } else {
+                for {
+                    select {
+                    case <-ctx.Done():
                         return
+                    case val, ok := <- buf:
+                        if ok {
+                            // val exists
+                            id := getBowIDFromPhoneNum(val.business.PhoneNumber)
+
+                            val.result.ID = id
+                            val.condition = bson.M{
+                                "business_user_id": strconv.Itoa(id),
+                            }
+
+                            // push to channel
+                            newBuf <- val
+                        } else {
+                            return
+                        }
                     }
                 }
             }()
-
-            bufArr = append(bufArr, buf)
-        }()
+            bufArr = append(bufArr, newBuf)
+        }(ctx)
     }
     return bufArr
 }
 
-func createMongoWorkers(ctx context.Context, buf <- chan buffer, num int) []buffer {
+func createMongoWorkers(ctx context.Context, buf <- chan buffer, num int) []<-chan buffer {
     // updates Num leads given to a particular business
     var bufArr = [] <-chan buffer{}
     for i := 0; i < num; i++ {
         // get chan and add it to array
-        bufChan := func(ctx context.Context){
+        func(ctx context.Context){
             newBuf := make(chan buffer, 100)
 
             go func(){
-                defer close(buf)
+                defer close(newBuf)
                 // read with switch statement
-                select {
-                case <-ctx.Done():
-                    return
-                case val, ok := <- buf:
-                    if ok {
-                        // use Val.Condition to get details from mongo
-                        condition := val.condition
-                        leads := getCountFromMongo("Bino_search", "broadcasts", val.condition, val.client)
-                        val.result.NumLeads = leads
-                        val.condition = bson.M{
-                            "replied_business_id": strconv.Itoa(val.result.ID),
-                        }
-
-                        // push to channel
-                        newBuf <- val
-                    } else {
+                for {
+                    select {
+                    case <-ctx.Done():
                         return
+                    case val, ok := <- buf:
+                        if ok {
+                            // use Val.Condition to get details from mongo
+                            leads := getCountFromMongo("Bino_search", "broadcasts", val.condition, val.client)
+                            val.result.NumLeads = leads
+                            val.condition = bson.M{
+                                "replied_business_id": strconv.Itoa(val.result.ID),
+                            }
+
+                            // push to channel
+                            newBuf <- val
+                        } else {
+                            return
+                        }
                     }
                 }
             }()
-
-            bufArr = append(bufArr, buf)
-        }()
+            bufArr = append(bufArr, newBuf)
+        }(ctx)
     }
     return bufArr
 }
 
-func createMongoWorkers2(ctx context.Context, buf <- chan buffer, num int) []buffer {
+func createMongoWorkers2(ctx context.Context, buf <- chan buffer, num int) []<- chan buffer {
     // updates Num Responses given by a particular business
     var bufArr = [] <-chan buffer{}
     for i := 0; i < num; i++ {
         // get chan and add it to array
-        bufChan := func(ctx context.Context){
+        func(ctx context.Context){
             newBuf := make(chan buffer, 100)
 
             go func(){
-                defer close(buf)
+                defer close(newBuf)
                 // read with switch statement
-                select {
-                case <-ctx.Done():
-                    return
-                case val, ok := <- buf:
-                    if ok {
-                        // use Val.Condition to get details from mongo
-                        numResponses := getCountFromMongo("Bino_search", "convreplies", val.condition, val.client)
-                        val.result.NumResponse = numResponses
-                        // next query uses the same condition, no change required.
-                        // push to channel
-                        newBuf <- val
-                    } else {
+                for {
+                    select {
+                    case <-ctx.Done():
                         return
+                    case val, ok := <- buf:
+                        if ok {
+                            // use Val.Condition to get details from mongo
+                            numResponses := getCountFromMongo("Bino_search", "convreplies", val.condition, val.client)
+                            val.result.NumResponse = numResponses
+                            // next query uses the same condition, no change required.
+                            // push to channel
+                            newBuf <- val
+                        } else {
+                            return
+                        }
                     }
+
                 }
             }()
-
-            bufArr = append(bufArr, buf)
-        }()
+            bufArr = append(bufArr, newBuf)
+        }(ctx)
     }
     return bufArr
 }
 
-func createMongoWorkers3(ctx context.Context, buf <- chan buffer, num int) []buffer {
+func createMongoWorkers3(ctx context.Context, buf <- chan buffer, num int) []<-chan buffer {
     // updates numAccepts
     var bufArr = [] <-chan buffer{}
     for i := 0; i < num; i++ {
         // get chan and add it to array
-        bufChan := func(ctx context.Context){
+        func(ctx context.Context){
             newBuf := make(chan buffer, 100)
 
             go func(){
-                defer close(buf)
+                defer close(newBuf)
                 // read with switch statement
-                select {
-                case <-ctx.Done():
-                    return
-                case val, ok := <- buf:
-                    if ok {
-                        // use Val.Condition to get details from mongo
-                        numAccepts := getLeadsAccepted("Bino_search", "convreplies", val.condition, val.client)
-                        val.result.NumAccepts = numAccepts
-                        // no condition required for next task
-                        // push to channel
-                        newBuf <- val
-                    } else {
+                for {
+                    select {
+                    case <-ctx.Done():
                         return
+                    case val, ok := <- buf:
+                        if ok {
+                            // use Val.Condition to get details from mongo
+                            numAccepts := getLeadsAccepted("Bino_search", "convreplies", val.condition, val.client)
+                            val.result.NumAccepts = numAccepts
+                            // no condition required for next task
+                            // push to channel
+                            newBuf <- val
+                        } else {
+                            return
+                        }
                     }
                 }
             }()
-
-            bufArr = append(bufArr, buf)
-        }()
+            bufArr = append(bufArr, newBuf)
+        }(ctx)
     }
     return bufArr
 }
 
-func createScraperWorkers(ctx context.Context, buf <- chan buffer, num int) []buffer {
+func createScraperWorkers(ctx context.Context, buf <- chan buffer, num int) [] <-chan buffer {
     // updates everuthing else by fetching form google maps scraper
     var bufArr = [] <-chan buffer{}
     for i := 0; i < num; i++ {
         // get chan and add it to array
-        bufChan := func(ctx context.Context){
+        func(ctx context.Context){
             newBuf := make(chan buffer, 100)
 
             go func(){
-                defer close(buf)
+                defer close(newBuf)
                 // read with switch statement
-                select {
-                case <-ctx.Done():
-                    return
-                case val, ok := <- buf:
-                    if ok {
-                        scraperResponse := createScraperTask(val.scraperUrl, val.business.Location)
-                        val.result.Description = scraperResponse[0].Result[0].Description
-                        val.result.Competitors = scraperResponse[0].Result[0].Competitors
-                        val.result.DetailedAddress = scraperResponse[0].Result[0].DetailedAddress
-                        val.result.FeaturedImage = scraperResponse[0].Result[0].FeaturedImage
-                        val.result.Images = scraperResponse[0].Result[0].Images
-
-                        // push to channel
-                        newBuf <- val
-                    } else {
+                for {
+                    select {
+                    case <-ctx.Done():
                         return
+                    case val, ok := <- buf:
+                        if ok {
+                            scraperResponse := createScraperTask(val.scraperUrl, val.business.Location)
+                            val.result.Description = scraperResponse[0].Result[0].Description
+                            val.result.Competitors = scraperResponse[0].Result[0].Competitors
+                            val.result.DetailedAddress = scraperResponse[0].Result[0].DetailedAddress
+                            val.result.FeaturedImage = scraperResponse[0].Result[0].FeaturedImage
+                            val.result.Images = scraperResponse[0].Result[0].Images
+
+                            // push to channel
+                            newBuf <- val
+                        } else {
+                            return
+                        }
                     }
                 }
             }()
-
-            bufArr = append(bufArr, buf)
-        }()
+            bufArr = append(bufArr, newBuf)
+        }(ctx)
     }
     return bufArr
 }

@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"os"
 	"regexp"
-	"sync"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -64,12 +63,6 @@ func main() {
 	}
 	fmt.Println("Connected to target MongoDB!")
 
-	// // Delete existing documents in the collection
-	// _, err := col.DeleteMany(context.Background(), bson.M{})
-	// if err != nil {
-	// 	return fmt.Errorf("error clearing collection: %v", err)
-	// }
-
 	// Get data from mongo
 	condition := bson.M{
 		"state":            "business_send",
@@ -80,6 +73,7 @@ func main() {
 	fmt.Printf("Num data %v\n", len(data))
 
 	output := make(map[string]Business)
+    output2 := []Business{}
 
 	// Compile regex once before the loop
 	travelRegex, err := regexp.Compile(`(?i)\btravel(?:ling|led)?\b`)
@@ -95,22 +89,51 @@ func main() {
 				_, ok := output[phone]
 				if !ok {
 					output[phone] = business
+                    output2 = append(output2, business)
 				}
 			}
 		}
 	}
 
 	fmt.Printf("Num output %v\n", len(output))
-	// total := len(output)
 
-	// // Call bowApi
-	// updatedBusinessMap := make(map[string]UpdatedBusiness)
-	// fmt.Println("Calling bowApi to get business_id from phoneNum")
+    // Async pipeline begins
+    initBuf := createBuffer(output2, client, targetClient, scraperUrl)
+    asyncCtx, cancel := context.WithCancel(context.Background())
+    defer cancel()
+    bowArr := createBowWorkers(asyncCtx, initBuf, 4)
 
-	go populateBuffer(output, client, targetClient, scraperUrl)
-	wg := sync.WaitGroup{}
-	startWorkers(10, &wg)
-	wg.Wait()
+    m1 := combineChannels(bowArr)
+    m1Arr := createMongoWorkers(asyncCtx, m1, 4)
+
+    m2 := combineChannels(m1Arr)
+    m2Arr := createMongoWorkers2(asyncCtx, m2, 4)
+
+    m3 := combineChannels(m2Arr)
+    m3Arr := createMongoWorkers3(asyncCtx, m3, 4)
+
+    scraperChan := combineChannels(m3Arr)
+    scraperChanArr := createScraperWorkers(asyncCtx, scraperChan, 4)
+
+    outputChannel := combineChannels(scraperChanArr)
+
+    f, err := os.OpenFile("asyncOut.json", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer f.Close()
+
+    for {
+        val, ok := <- outputChannel
+        if ok {
+            fmt.Println(val)
+        } else {
+            fmt.Println("channel is empty")
+            break
+        }
+    }
+
+    // Async pipeline ends
 
 	defer func() {
 		if err := targetClient.Disconnect(targetCtx); err != nil {
@@ -301,13 +324,11 @@ func createScraperTask(scraperUrl string, data string) ScraperResponse {
 	}
 
 	var resp ScraperResponse
-	err = json.Unmarshal(body, &resp)
-	if err != nil {
-		fmt.Printf("*******")
-		fmt.Println("Error unmarshalling response")
-		fmt.Println(err)
-		return ScraperResponse{}
-	}
+	_ = json.Unmarshal(body, &resp)
+	// if err != nil {
+	// 	fmt.Println("Error unmarshalling response")
+	// 	return ScraperResponse{}
+	// }
 
 	return resp
 }
