@@ -182,47 +182,45 @@ type ScraperResponse []struct {
 		Coordinates             string      `json:"coordinates"`
 		ZoomLevel               int         `json:"zoom_level"`
 	} `json:"data"`
-	Metadata struct {
-	} `json:"metadata"`
 	Result []struct {
 		PlaceID         string        `json:"place_id"`
 		Name            string        `json:"name"`
 		Description     string        `json:"description"`
-		IsSpendingOnAds bool          `json:"is_spending_on_ads"`
+		// IsSpendingOnAds bool          `json:"is_spending_on_ads"`
 		Reviews         int           `json:"reviews"`
 		Competitors     []interface{} `json:"competitors"`
 		Website         string        `json:"website"`
 		Phone           string        `json:"phone"`
-		CanClaim        bool          `json:"can_claim"`
-		Owner           struct {
-			ID   string `json:"id"`
-			Name string `json:"name"`
-			Link string `json:"link"`
-		} `json:"owner"`
+		// CanClaim        bool          `json:"can_claim"`
+		// Owner           struct {
+		// 	ID   string `json:"id"`
+		// 	Name string `json:"name"`
+		// 	Link string `json:"link"`
+		// } `json:"owner"`
 		FeaturedImage  string      `json:"featured_image"`
-		MainCategory   string      `json:"main_category"`
-		Categories     []string    `json:"categories"`
-		Rating         float64     `json:"rating"`
-		WorkdayTiming  interface{} `json:"workday_timing"`
-		Address        string      `json:"address"`
-		ReviewKeywords []struct {
-			Keyword string `json:"keyword"`
-			Count   int    `json:"count"`
-		} `json:"review_keywords"`
-		ReviewsPerRating struct {
-			Num1 int `json:"1"`
-			Num2 int `json:"2"`
-			Num3 int `json:"3"`
-			Num4 int `json:"4"`
-			Num5 int `json:"5"`
-		} `json:"reviews_per_rating"`
-		FeaturedQuestion interface{} `json:"featured_question"`
-		ReviewsLink      string      `json:"reviews_link"`
+		// MainCategory   string      `json:"main_category"`
+		// Categories     []string    `json:"categories"`
+		// Rating         float64     `json:"rating"`
+		// WorkdayTiming  interface{} `json:"workday_timing"`
+		// Address        string      `json:"address"`
+		// ReviewKeywords []struct {
+		// 	Keyword string `json:"keyword"`
+		// 	Count   int    `json:"count"`
+		// } `json:"review_keywords"`
+		// ReviewsPerRating struct {
+		// 	Num1 int `json:"1"`
+		// 	Num2 int `json:"2"`
+		// 	Num3 int `json:"3"`
+		// 	Num4 int `json:"4"`
+		// 	Num5 int `json:"5"`
+		// } `json:"reviews_per_rating"`
+		// FeaturedQuestion interface{} `json:"featured_question"`
+		// ReviewsLink      string      `json:"reviews_link"`
 		Coordinates      struct {
-			Latitude  float64 `json:"latitude"`
-			Longitude float64 `json:"longitude"`
+			Latitude  interface{} `json:"latitude"`
+			Longitude interface{} `json:"longitude"`
 		} `json:"coordinates"`
-		PlusCode        string `json:"plus_code"`
+		// PlusCode        string `json:"plus_code"`
 		DetailedAddress struct {
 			Ward        string `json:"ward"`
 			Street      string `json:"street"`
@@ -235,11 +233,11 @@ type ScraperResponse []struct {
 			About string `json:"about"`
 			Link  string `json:"link"`
 		} `json:"images"`
-		Query string `json:"query"`
+		// Query string `json:"query"`
 	} `json:"result"`
-	ResultCount int    `json:"result_count"`
-	CreatedAt   string `json:"created_at"`
-	UpdatedAt   string `json:"updated_at"`
+	// ResultCount int    `json:"result_count"`
+	// CreatedAt   string `json:"created_at"`
+	// UpdatedAt   string `json:"updated_at"`
 }
 
 type Scraperbody struct {
