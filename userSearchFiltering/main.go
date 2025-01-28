@@ -148,18 +148,19 @@ func main() {
 
 		updatedBusinessMap[number] = temp
 		updatedBusinessMap[number] = temp
-		err = pushToMongo("filteredSearch", "searchScriptOutput", temp, targetClient)
-		if err != nil {
-			fmt.Printf("Error pushing data to target MongoDB: %v\n", err)
-		}
+        fmt.Println(temp)
+		// err = pushToMongo("filteredSearch", "searchScriptOutput", temp, targetClient)
+		// if err != nil {
+		// 	fmt.Printf("Error pushing data to target MongoDB: %v\n", err)
+		// }
 		// fmt.Printf("leads: %v\n", leads)
 		// fmt.Printf("replies: %v\n", leadsRepliedTo)
 		// fmt.Printf("accepts: %v\n", leadsRepliedTo)
 		flag++
 		bar.Add(1)
-		// if flag == 5 {
-		// 	break
-		// }
+		if flag == 30 {
+			break
+		}
 	}
 
 	// Marshalling json
