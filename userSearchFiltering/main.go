@@ -10,10 +10,9 @@ import (
 	"net/http"
 	"os"
 	"regexp"
-	"strconv"
+	"sync"
 	"time"
 
-	"github.com/schollz/progressbar/v3"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -78,6 +77,7 @@ func main() {
 	}
 	var data []Mongo
 	getDataFromMongo("Bino_search", "users", condition, &data, client)
+	fmt.Printf("Num data %v\n", len(data))
 
 	output := make(map[string]Business)
 
@@ -101,86 +101,17 @@ func main() {
 	}
 
 	fmt.Printf("Num output %v\n", len(output))
-	total := len(output)
+	// total := len(output)
 
-	// Call bowApi
-	updatedBusinessMap := make(map[string]UpdatedBusiness)
-	fmt.Println("Calling bowApi to get business_id from phoneNum")
-	flag := 0
+	// // Call bowApi
+	// updatedBusinessMap := make(map[string]UpdatedBusiness)
+	// fmt.Println("Calling bowApi to get business_id from phoneNum")
 
-	// add progress bar
-	bar := progressbar.Default(int64(total))
-	for number := range output {
-		id := getBowIDFromPhoneNum(number)
-		if id == 0 {
-			continue
-		}
+	go populateBuffer(output, client, targetClient, scraperUrl)
+	wg := sync.WaitGroup{}
+	startWorkers(10, &wg)
+	wg.Wait()
 
-		leadsCondition := bson.M{
-			"business_user_id": strconv.Itoa(id),
-		}
-		leads := getCountFromMongo("Bino_search", "broadcasts", leadsCondition, client)
-
-		convRepliesCondition := bson.M{
-			"replied_business_id": strconv.Itoa(id),
-		}
-		leadsRepliedTo := getCountFromMongo("Bino_search", "convreplies", convRepliesCondition, client)
-
-		leadsAccepted := getLeadsAccepted("Bino_search", "convreplies", convRepliesCondition, client)
-
-		scraperResponse := createScraperTask(scraperUrl, output[number].Location)
-
-		var temp UpdatedBusiness
-		temp.BusinessName = output[number].BusinessName
-		temp.Location = output[number].Location
-		temp.PhoneNumber = output[number].PhoneNumber
-		temp.ID = id
-		temp.NumLeads = leads
-		temp.NumResponse = leadsRepliedTo
-		temp.NumAccepts = leadsAccepted
-		if len(scraperResponse) > 0 && len(scraperResponse[0].Result) > 0 {
-			temp.Description = scraperResponse[0].Result[0].Description
-			temp.Competitors = scraperResponse[0].Result[0].Competitors
-			temp.DetailedAddress = scraperResponse[0].Result[0].DetailedAddress
-			temp.FeaturedImage = scraperResponse[0].Result[0].FeaturedImage
-			temp.Images = scraperResponse[0].Result[0].Images
-		}
-
-		updatedBusinessMap[number] = temp
-		updatedBusinessMap[number] = temp
-		err = pushToMongo("filteredSearch", "searchScriptOutput", temp, targetClient)
-		if err != nil {
-			fmt.Printf("Error pushing data to target MongoDB: %v\n", err)
-		}
-		// fmt.Printf("leads: %v\n", leads)
-		// fmt.Printf("replies: %v\n", leadsRepliedTo)
-		// fmt.Printf("accepts: %v\n", leadsRepliedTo)
-		flag++
-		bar.Add(1)
-		// if flag == 5 {
-		// 	break
-		// }
-	}
-
-	// Marshalling json
-
-	// out, err := json.Marshal(updatedBusinessMap)
-	// if err != nil {
-	// 	log.Fatalf("error marshalling")
-	// }
-
-	// // Write marshalled json to file
-	// err = os.WriteFile("output.json", out, 0644)
-	// if err != nil {
-	// 	fmt.Println("Error writing JSON to file:", err)
-	// 	return
-	// }
-
-	// Connect to target MongoDB for pushing data
-
-	// Push data to target MongoDB
-
-	// Disconnect from target MongoDB
 	defer func() {
 		if err := targetClient.Disconnect(targetCtx); err != nil {
 			log.Fatalf("Failed to disconnect from target MongoDB: %v", err)
