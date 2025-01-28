@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strconv"
 	"sync"
-
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 )
@@ -18,121 +17,237 @@ type buffer struct {
 	result       *UpdatedBusiness
 }
 
-
 var countFromMongoBuffer = make(chan buffer, 100)
 var leadAcceptBuffer = make(chan buffer, 100)
 var scraperBuffer = make(chan buffer, 100)
 var pushToMongoBuffer = make(chan buffer, 100)
 
-func bowIDWorker(bowIdBuffer <-chan buffer, wg *sync.WaitGroup) {
-	for job := range bowIdBuffer {
-		job.result.BusinessName = job.business.BusinessName
-		job.result.Location = job.business.Location
-		job.result.PhoneNumber = job.business.PhoneNumber
-		id := getBowIDFromPhoneNum(job.business.PhoneNumber)
-		leadsCondition := bson.M{
-			"business_user_id": strconv.Itoa(id),
-		}
-		job.condition = leadsCondition
-		job.result.ID = id
-		pushToMongoBuffer <- job
-	}
-	wg.Done()
+func createBuffer(output []Business, client, targetClient *mongo.Client, scraperUrl string) (<- chan buffer) {
+    buf := make(chan buffer, 100)
+    go func(){
+        defer close(buf)
+        for _, business := range output {
+            newBuf := buffer{}
+            newBuf.business = business
+            newBuf.client = client
+            newBuf.targetClient = targetClient
+            newBuf.scrapeUrl = scraperUrl
+            newBuf.result = &UpdatedBusiness{}
+
+            newBuf.result.BusinessName = business.BusinessName
+            newBuf.result.Location = business.Location
+            newBuf.result.PhoneNumber = business.PhoneNumber
+
+            buf <- newBuf
+        }
+    }()
+
+    return buf
 }
 
-func countFromMongoWorker(countFromMongoBuffer <-chan buffer, wg *sync.WaitGroup) {
-	for job := range countFromMongoBuffer {
-		leads := getCountFromMongo("Bino_search", "convreplies", job.condition, job.client)
-		job.result.NumLeads = leads
+// function bowWorker reads from buf channel, gets bowId from phoneNumber, adds condition and pushes it to another channel
+func createBowWorkers(ctx context.Context, buf <- chan buffer, num int) []buffer {
+    var bufArr = [] <-chan buffer{}
+    for i := 0; i < num; i++ {
+        // get chan and add it to array
+        bufChan := func(ctx context.Context){
+            newBuf := make(chan buffer, 1000)
 
-		job.condition = bson.M{
-			"replied_business_id": strconv.Itoa(job.result.ID),
-		}
-		leadAcceptBuffer <- job
-	}
-	wg.Done()
+            go func(){
+                defer close(buf)
+                // read with switch statement
+                select {
+                case <-ctx.Done():
+                    return
+                case val, ok := <- buf:
+                    if ok {
+                        // val exists
+                        id := getBowIDFromPhoneNum(val.PhoneNumber)
+
+                        val.result.ID = id
+                        val.condition = bson.M{
+                            "business_user_id": strconv.Itoa(id),
+                        }
+
+                        // push to channel
+                        newBuf <- val
+                    } else {
+                        return
+                    }
+                }
+            }()
+
+            bufArr = append(bufArr, buf)
+        }()
+    }
+    return bufArr
 }
 
-func leadAcceptWorker(leadAcceptBuffer <-chan buffer, wg *sync.WaitGroup) {
-	for job := range leadAcceptBuffer {
-		leadsRepliedTo := getCountFromMongo("Bino_search", "convreplies", job.condition, job.client)
-		leadsAccepted := getLeadsAccepted("Bino_search", "convreplies", job.condition, job.client)
-		job.result.NumResponse = leadsRepliedTo
-		job.result.NumAccepts = leadsAccepted
-		scraperBuffer <- job
-	}
-	wg.Done()
+func createMongoWorkers(ctx context.Context, buf <- chan buffer, num int) []buffer {
+    // updates Num leads given to a particular business
+    var bufArr = [] <-chan buffer{}
+    for i := 0; i < num; i++ {
+        // get chan and add it to array
+        bufChan := func(ctx context.Context){
+            newBuf := make(chan buffer, 100)
+
+            go func(){
+                defer close(buf)
+                // read with switch statement
+                select {
+                case <-ctx.Done():
+                    return
+                case val, ok := <- buf:
+                    if ok {
+                        // use Val.Condition to get details from mongo
+                        condition := val.condition
+                        leads := getCountFromMongo("Bino_search", "broadcasts", val.condition, val.client)
+                        val.result.NumLeads = leads
+                        val.condition = bson.M{
+                            "replied_business_id": strconv.Itoa(val.result.ID),
+                        }
+
+                        // push to channel
+                        newBuf <- val
+                    } else {
+                        return
+                    }
+                }
+            }()
+
+            bufArr = append(bufArr, buf)
+        }()
+    }
+    return bufArr
 }
 
-func scraperWorker(scraperBuffer <-chan buffer, wg *sync.WaitGroup) {
-	for job := range scraperBuffer {
-		scraperResponse := createScraperTask(job.scraperUrl, job.result.Location)
-		job.result.Description = scraperResponse[0].Result[0].Description
-		job.result.Competitors = scraperResponse[0].Result[0].Competitors
-		job.result.DetailedAddress = scraperResponse[0].Result[0].DetailedAddress
-		job.result.FeaturedImage = scraperResponse[0].Result[0].FeaturedImage
-		job.result.Images = scraperResponse[0].Result[0].Images
-		pushToMongoBuffer <- job
-	}
-	wg.Done()
+func createMongoWorkers2(ctx context.Context, buf <- chan buffer, num int) []buffer {
+    // updates Num Responses given by a particular business
+    var bufArr = [] <-chan buffer{}
+    for i := 0; i < num; i++ {
+        // get chan and add it to array
+        bufChan := func(ctx context.Context){
+            newBuf := make(chan buffer, 100)
+
+            go func(){
+                defer close(buf)
+                // read with switch statement
+                select {
+                case <-ctx.Done():
+                    return
+                case val, ok := <- buf:
+                    if ok {
+                        // use Val.Condition to get details from mongo
+                        numResponses := getCountFromMongo("Bino_search", "convreplies", val.condition, val.client)
+                        val.result.NumResponse = numResponses
+                        // next query uses the same condition, no change required.
+                        // push to channel
+                        newBuf <- val
+                    } else {
+                        return
+                    }
+                }
+            }()
+
+            bufArr = append(bufArr, buf)
+        }()
+    }
+    return bufArr
 }
 
-func pushToMongoWorker(pushToMongoBuffer <-chan buffer, wg *sync.WaitGroup) {
-	for job := range pushToMongoBuffer {
-		err := pushToMongo("async", "asyncImp", *job.result, job.targetClient)
-		if err != nil {
-			fmt.Printf("Error pushing data to target MongoDB: %v\n", err)
-		} else {
-			fmt.Printf("Pushed data to target MongoDB: %v\n", job.result.ID)
-		}
-	}
-	wg.Done()
+func createMongoWorkers3(ctx context.Context, buf <- chan buffer, num int) []buffer {
+    // updates numAccepts
+    var bufArr = [] <-chan buffer{}
+    for i := 0; i < num; i++ {
+        // get chan and add it to array
+        bufChan := func(ctx context.Context){
+            newBuf := make(chan buffer, 100)
+
+            go func(){
+                defer close(buf)
+                // read with switch statement
+                select {
+                case <-ctx.Done():
+                    return
+                case val, ok := <- buf:
+                    if ok {
+                        // use Val.Condition to get details from mongo
+                        numAccepts := getLeadsAccepted("Bino_search", "convreplies", val.condition, val.client)
+                        val.result.NumAccepts = numAccepts
+                        // no condition required for next task
+                        // push to channel
+                        newBuf <- val
+                    } else {
+                        return
+                    }
+                }
+            }()
+
+            bufArr = append(bufArr, buf)
+        }()
+    }
+    return bufArr
 }
 
-func populateBuffer(businesses map[string]Business, client *mongo.Client, targetClient *mongo.Client, url string) <-chan buffer {
-    var bowIdBuffer = make(chan buffer, 100)
-	go func() {
-		defer close(bowIdBuffer)
-		for _, business := range businesses {
-			bowIdBuffer <- buffer{business: business, client: client, targetClient: targetClient, scraperUrl: url, result: &UpdatedBusiness{}}
-		}
-	}()
-	return bowIdBuffer
+func createScraperWorkers(ctx context.Context, buf <- chan buffer, num int) []buffer {
+    // updates everuthing else by fetching form google maps scraper
+    var bufArr = [] <-chan buffer{}
+    for i := 0; i < num; i++ {
+        // get chan and add it to array
+        bufChan := func(ctx context.Context){
+            newBuf := make(chan buffer, 100)
+
+            go func(){
+                defer close(buf)
+                // read with switch statement
+                select {
+                case <-ctx.Done():
+                    return
+                case val, ok := <- buf:
+                    if ok {
+                        scraperResponse := createScraperTask(val.scraperUrl, val.business.Location)
+                        val.result.Description = scraperResponse[0].Result[0].Description
+                        val.result.Competitors = scraperResponse[0].Result[0].Competitors
+                        val.result.DetailedAddress = scraperResponse[0].Result[0].DetailedAddress
+                        val.result.FeaturedImage = scraperResponse[0].Result[0].FeaturedImage
+                        val.result.Images = scraperResponse[0].Result[0].Images
+
+                        // push to channel
+                        newBuf <- val
+                    } else {
+                        return
+                    }
+                }
+            }()
+
+            bufArr = append(bufArr, buf)
+        }()
+    }
+    return bufArr
 }
 
-func startWorkers(numWorkers int, wg *sync.WaitGroup) {
-	for i := 0; i < numWorkers; i++ {
-		go bowIDWorker(bowIdBuffer, wg)
-		go countFromMongoWorker(countFromMongoBuffer, wg)
-		go leadAcceptWorker(leadAcceptBuffer, wg)
-		go scraperWorker(scraperBuffer, wg)
-		go pushToMongoWorker(pushToMongoBuffer, wg)
-		wg.Add(5)
-	}
-}
+// func combChans combines all given channels
+func combineChannels(channels []<-chan buffer) <-chan buffer {
+    // Create a combined output channel
+    combined := make(chan buffer)
 
-func merge(channels ...<-chan buffer) <-chan buffer {
-	out := make(chan buffer)
-	var wg sync.WaitGroup
+    // Start a goroutine for each input channel
+    var wg sync.WaitGroup
+    for _, ch := range channels {
+        wg.Add(1)
+        go func(c <-chan buffer) {
+            defer wg.Done()
+            for buf := range c {
+                combined <- buf // Forward values to the combined channel
+            }
+        }(ch)
+    }
 
-	// Start a goroutine for each channel
-	output := func(ch <-chan buffer) {
-		defer wg.Done()
-		for val := range ch {
-			out <- val
-		}
-	}
+    // Close the combined channel once all input channels are processed
+    go func() {
+        wg.Wait()
+        close(combined)
+    }()
 
-	wg.Add(len(channels))
-	for _, ch := range channels {
-		go output(ch)
-	}
-
-	// Close the output channel once all input channels are done
-	go func() {
-		wg.Wait()
-		close(out)
-	}()
-
-	return out
+    return combined
 }
