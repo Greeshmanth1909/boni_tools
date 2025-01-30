@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -11,6 +12,8 @@ import (
 	"os"
 	"regexp"
 	"time"
+
+	"github.com/schollz/progressbar/v3"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -73,7 +76,7 @@ func main() {
 	fmt.Printf("Num data %v\n", len(data))
 
 	output := make(map[string]Business)
-    output2 := []Business{}
+	output2 := []Business{}
 
 	// Compile regex once before the loop
 	travelRegex, err := regexp.Compile(`(?i)\btravel(?:ling|led)?\b`)
@@ -89,51 +92,65 @@ func main() {
 				_, ok := output[phone]
 				if !ok {
 					output[phone] = business
-                    output2 = append(output2, business)
+					output2 = append(output2, business)
 				}
 			}
 		}
 	}
 
-	fmt.Printf("Num output %v\n", len(output))
+	fmt.Printf("Num output %v\n", len(output2))
 
-    // Async pipeline begins
-    initBuf := createBuffer(output2, client, targetClient, scraperUrl)
-    asyncCtx, cancel := context.WithCancel(context.Background())
-    defer cancel()
-    bowArr := createBowWorkers(asyncCtx, initBuf, 4)
+	// Async pipeline begins
+	initBuf := createBuffer(output2, client, targetClient, scraperUrl)
+	asyncCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	bowArr := createBowWorkers(asyncCtx, initBuf, 8)
 
-    m1 := combineChannels(bowArr)
-    m1Arr := createMongoWorkers(asyncCtx, m1, 4)
+	m1 := combineChannels(bowArr)
+	m1Arr := createMongoWorkers(asyncCtx, m1, 8)
 
-    m2 := combineChannels(m1Arr)
-    m2Arr := createMongoWorkers2(asyncCtx, m2, 4)
+	m2 := combineChannels(m1Arr)
+	m2Arr := createMongoWorkers2(asyncCtx, m2, 8)
 
-    m3 := combineChannels(m2Arr)
-    m3Arr := createMongoWorkers3(asyncCtx, m3, 4)
+	m3 := combineChannels(m2Arr)
+	m3Arr := createMongoWorkers3(asyncCtx, m3, 8)
 
-    scraperChan := combineChannels(m3Arr)
-    scraperChanArr := createScraperWorkers(asyncCtx, scraperChan, 4)
+	scraperChan := combineChannels(m3Arr)
+	scraperChanArr := createScraperWorkers(asyncCtx, scraperChan, 8)
 
-    outputChannel := combineChannels(scraperChanArr)
+	outputChannel := combineChannels(scraperChanArr)
 
-    f, err := os.OpenFile("asyncOut.json", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-    if err != nil {
-        log.Fatal(err)
-    }
-    defer f.Close()
+	flag := 0
+	bar := progressbar.Default(int64(len(output2)))
 
-    for {
-        val, ok := <- outputChannel
-        if ok {
-            fmt.Println(val)
-        } else {
-            fmt.Println("channel is empty")
-            break
-        }
-    }
+	for val := range outputChannel {
+		flag++
+		pushToMongo("async", "asyncImp", *val.result, val.targetClient)
+		// fmt.Println(flag)
+		// if flag == 30 {
+		// 	fmt.Println("pushed 30 to mongo")
+		// 	break
+		// }
+		bar.Add(1)
+	}
 
-    // Async pipeline ends
+	// f, err := os.OpenFile("asyncOut.json", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
+	// defer f.Close()
+	//
+	// for {
+	// 	val, ok := <-outputChannel
+	// 	if ok {
+	// 		fmt.Println(val)
+	// 	} else {
+	// 		fmt.Println("channel is empty")
+	// 		break
+	// 	}
+	// }
+
+	// Async pipeline ends
 
 	defer func() {
 		if err := targetClient.Disconnect(targetCtx); err != nil {
@@ -274,7 +291,7 @@ func pushToMongo(db, collection string, data UpdatedBusiness, client *mongo.Clie
 	return nil
 }
 
-func createScraperTask(scraperUrl string, data string) ScraperResponse {
+func createScraperTask(scraperUrl string, data string) (ScraperResponse, error, map[string]interface{}) {
 	jsonStr := `{
 		"scraper_name": "google_maps_scraper",
 		"data": {
@@ -295,6 +312,7 @@ func createScraperTask(scraperUrl string, data string) ScraperResponse {
 		}
 	}`
 
+	var n map[string]interface{}
 	jsonDataStrFormatted := fmt.Sprintf(jsonStr, data)
 
 	// Convert to a byte buffer for the request
@@ -303,7 +321,7 @@ func createScraperTask(scraperUrl string, data string) ScraperResponse {
 	request, err := http.NewRequest("POST", scraperUrl, bytes.NewBuffer(jsonData))
 	if err != nil {
 		fmt.Println("Error creating request")
-		return ScraperResponse{}
+		return ScraperResponse{}, nil, n
 	}
 	// add headers
 	request.Header.Set("Content-Type", "application/json")
@@ -312,7 +330,7 @@ func createScraperTask(scraperUrl string, data string) ScraperResponse {
 	response, err := client.Do(request)
 	if err != nil {
 		fmt.Println("Error making request")
-		return ScraperResponse{}
+		return ScraperResponse{}, nil, n
 	}
 
 	defer response.Body.Close()
@@ -320,15 +338,16 @@ func createScraperTask(scraperUrl string, data string) ScraperResponse {
 	body, err := ioutil.ReadAll(response.Body)
 	if err != nil {
 		fmt.Println("Error reading response body")
-		return ScraperResponse{}
+		return ScraperResponse{}, nil, n
 	}
 
 	var resp ScraperResponse
 	_ = json.Unmarshal(body, &resp)
-	// if err != nil {
-	// 	fmt.Println("Error unmarshalling response")
-	// 	return ScraperResponse{}
-	// }
+	if err != nil {
+		fmt.Println("Error unmarshalling response")
+		json.Unmarshal(body, &n)
+		return ScraperResponse{}, errors.New("420"), n
+	}
 
-	return resp
+	return resp, nil, n
 }

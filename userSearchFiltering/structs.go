@@ -118,16 +118,22 @@ type ConvReplies struct {
 type Mongo struct {
 	ConvStartMsg    string `bson:"conv_start_msg"`
 	BusinessDetails []struct {
-		BusinessName string `bson:"business_name"`
-		Location     string `bson:"location"`
-		PhoneNumber  string `bson:"phone_number"`
+		BusinessName        string   `bson:"business_name"`
+		Location            string   `bson:"location"`
+		PhoneNumber         string   `bson:"phone_number"`
+		BusinessExamples    []string `bson:"business_examples"`
+		ItemRelatedExamples []string `bson:"item_related_examples"`
 	} `bson:"business_details"`
+	BusinessExamples    []string `bson:"business_examples"`
+	ItemRelatedExamples []string `bson:"item_related_examples"`
 }
 
 type Business struct {
-	BusinessName string `bson:"business_name"`
-	Location     string `bson:"location"`
-	PhoneNumber  string `bson:"phone_number"`
+	BusinessName        string   `bson:"business_name"`
+	Location            string   `bson:"location"`
+	PhoneNumber         string   `bson:"phone_number"`
+	BusinessExamples    []string `bson:"business_examples"`
+	ItemRelatedExamples []string `bson:"item_related_examples"`
 }
 
 type UpdatedBusiness struct {
@@ -153,6 +159,9 @@ type UpdatedBusiness struct {
 		About string `json:"about"`
 		Link  string `json:"link"`
 	} `json:"google_maps_images"`
+	Sc                 map[string]interface{} `json:"sc"`
+	B_ItemTagExamples  interface{}            `json:"b_item_tag_examples"`
+	B_BusinessExamples interface{}            `json:"b_business_examples"`
 }
 
 type ScraperResponse []struct {
@@ -183,21 +192,21 @@ type ScraperResponse []struct {
 		ZoomLevel               int         `json:"zoom_level"`
 	} `json:"data"`
 	Result []struct {
-		PlaceID         string        `json:"place_id"`
-		Name            string        `json:"name"`
-		Description     string        `json:"description"`
+		PlaceID     string `json:"place_id"`
+		Name        string `json:"name"`
+		Description string `json:"description"`
 		// IsSpendingOnAds bool          `json:"is_spending_on_ads"`
-		Reviews         int           `json:"reviews"`
-		Competitors     []interface{} `json:"competitors"`
-		Website         string        `json:"website"`
-		Phone           string        `json:"phone"`
+		Reviews     int           `json:"reviews"`
+		Competitors []interface{} `json:"competitors"`
+		Website     string        `json:"website"`
+		Phone       string        `json:"phone"`
 		// CanClaim        bool          `json:"can_claim"`
 		// Owner           struct {
 		// 	ID   string `json:"id"`
 		// 	Name string `json:"name"`
 		// 	Link string `json:"link"`
 		// } `json:"owner"`
-		FeaturedImage  string      `json:"featured_image"`
+		FeaturedImage string `json:"featured_image"`
 		// MainCategory   string      `json:"main_category"`
 		// Categories     []string    `json:"categories"`
 		// Rating         float64     `json:"rating"`
@@ -216,7 +225,7 @@ type ScraperResponse []struct {
 		// } `json:"reviews_per_rating"`
 		// FeaturedQuestion interface{} `json:"featured_question"`
 		// ReviewsLink      string      `json:"reviews_link"`
-		Coordinates      struct {
+		Coordinates struct {
 			Latitude  interface{} `json:"latitude"`
 			Longitude interface{} `json:"longitude"`
 		} `json:"coordinates"`
